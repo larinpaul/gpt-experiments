@@ -255,6 +255,386 @@ void testFindAll() {
 }
 
 
+//// 2022/02/27 
+// So I asked the AI this question:
+Imagine you are a Java Software developer who works with Spring, Spring Boot, Gradle, Mockito, Junit, Testcontainers
+
+I have a test for my application:
+
+@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+public class EmployeeControllerTest extends AbstractDbTest {
+
+    @LocalServerPort
+    private int port;
+
+    private final String BASE_PATH = "/api/v1/employees"; 
+
+    @Test
+    public void testGetAllEmployees() {
+        List<EmployeeDto> list = given()
+                .port(port)
+                .when()
+                .get(BASE_PATH)
+                .then()
+                .assertThat()
+                .statusCode(HttpStatus.OK.value())
+                .and()
+                .extract()
+                .body()
+                .as(new TypeRef<>() {
+            });
+    }
+
+Here's the error:
+1 expectation failed.
+Expected status code <200> but was <500>.
+
+How can I solve it?
+
+/// Here's what the AI wrote:
+
+Based on the error message, it seems that the server is returning a 500 status code instead of the expected 200 status code. Here are some code suggestions to help troubleshoot and fix the issue:
+
+Check the server logs:
+You can use logging frameworks like Logback, Log4j, or JUL to log messages to the console or a file. Check the logs for any exceptions or errors that might be causing the internal server error. Here is an example using Logback:
+
+java
+Copy code
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+public class EmployeeController {
+    private static final Logger logger = LoggerFactory.getLogger(EmployeeController.class);
+
+    public List<EmployeeDto> getAllEmployees() {
+        try {
+            // your code to retrieve all employees
+        } catch (Exception e) {
+            logger.error("An error occurred while retrieving all employees", e);
+            throw new RuntimeException(e);
+        }
+    }
+}
+Check the code:
+Review the code for the endpoint being tested and ensure that it is properly handling any exceptions and returning the expected response. Here is an example using Spring MVC:
+
+kotlin
+Copy code
+@RestController
+@RequestMapping("/api/v1/employees")
+public class EmployeeController {
+
+    @Autowired
+    private EmployeeService employeeService;
+
+    @GetMapping
+    public ResponseEntity<List<EmployeeDto>> getAllEmployees() {
+        try {
+            List<EmployeeDto> employees = employeeService.getAllEmployees();
+            return ResponseEntity.ok().body(employees);
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        }
+    }
+}
+Verify the database:
+Make sure that the required data is present and that there are no issues with the database configuration. You can use Testcontainers to spin up a containerized database for your tests. Here is an example using PostgreSQL:
+
+scss
+Copy code
+@Container
+public static PostgreSQLContainer<?> postgreSQLContainer = new PostgreSQLContainer<>("postgres:12.3")
+        .withDatabaseName("test")
+        .withUsername("test")
+        .withPassword("test");
+
+@Test
+public void testGetAllEmployees() {
+    List<EmployeeDto> list = given()
+            .port(port)
+            .when()
+            .get(BASE_PATH)
+            .then()
+            .assertThat()
+            .statusCode(HttpStatus.OK.value())
+            .and()
+            .extract()
+            .body()
+            .as(new TypeRef<>() {
+        });
+}
+Use mock objects:
+If the issue is not related to the database, consider using Mockito to create mock objects and test the controller logic in isolation. Here is an example using Mockito:
+
+less
+Copy code
+@RunWith(MockitoJUnitRunner.class)
+public class EmployeeControllerTest {
+
+    @Mock
+    private EmployeeService employeeService;
+
+    @InjectMocks
+    private EmployeeController employeeController;
+
+    @Test
+    public void testGetAllEmployees() {
+        List<EmployeeDto> employees = Arrays.asList(new EmployeeDto("John", "Doe", "john.doe@example.com"));
+        when(employeeService.getAllEmployees()).thenReturn(employees);
+
+        ResponseEntity<List<EmployeeDto>> response = employeeController.getAllEmployees();
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+        assertEquals(employees, response.getBody());
+    }
+}
+Check dependencies:
+Ensure that all dependencies required by the application are present and correctly configured. If using Testcontainers, verify that the container is properly initialized and that the application is connecting to it as expected. Here is an example using Gradle:
+
+rust
+Copy code
+dependencies {
+    implementation 'org.springframework.boot:spring-boot-starter-web'
+    implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
+    implementation 'org.postgresql:postgresql:42.2.14'
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    testImplementation 'org.testcontainers
+
+
+//// 2022 02 28
+
+/// I have accidentally deleted all of the yesterday's code.
+/// In any case, with the help of GPT and some other sites,
+/// here is what I have been able to write
+
+// AbstractDbTest.java
+package com.example.employeecrudapplication;
+
+import org.junit.jupiter.api.BeforeAll;
+import org.springframework.boot.test.util.TestPropertyValues;
+import org.springframework.context.ApplicationContextInitializer;
+import org.springframework.context.ConfigurableApplicationContext;
+import org.springframework.test.context.ContextConfiguration;
+import org.testcontainers.containers.PostgreSQLContainer;
+import org.testcontainers.junit.jupiter.Testcontainers;
+
+import static org.junit.jupiter.api.Assumptions.assumeTrue;
+
+
+@Testcontainers
+@ContextConfiguration(initializers = {AbstractDbTest.Initializer.class})
+public class AbstractDbTest {
+
+    // Попробуем поднять ТестКонтейнер, чтобы он поднимался перед тестами,
+    // и чтобы все тесты баз данных наследовали AbstractDbTest.java
+
+    private static final PostgreSQLContainer<?> postgresContainer =
+            new PostgreSQLContainer<>("postgres:13.1-alpine")
+                    .withDatabaseName("employees")
+                    .withUsername("postgres")
+                    .withPassword("postgres");
+
+    static class Initializer implements ApplicationContextInitializer<ConfigurableApplicationContext> {
+        public void initialize(ConfigurableApplicationContext configurableApplicationContext) {
+            TestPropertyValues.of(
+                    "spring.datasource.url=" + postgresContainer.getJdbcUrl(),
+                    "spring.datasource.username=" + postgresContainer.getUsername(),
+                    "spring.datasource.password=" + postgresContainer.getPassword()
+            ).applyTo(configurableApplicationContext.getEnvironment());
+        }
+    }
+
+    static {
+        postgresContainer.start();
+    }
+
+    @BeforeAll
+    public static void checkPostgresContainerIsRunning() {
+        assumeTrue(postgresContainer.isRunning());
+    }
+
+}
+
+// EmployeeControllerTest.java
+package com.example.employeecrudapplication.controller;
+
+import com.example.employeecrudapplication.AbstractDbTest;
+import com.example.employeecrudapplication.model.dto.EmployeeDto;
+import io.restassured.common.mapper.TypeRef;
+import io.restassured.http.ContentType;
+import io.restassured.path.json.JsonPath;
+import io.restassured.response.Response;
+import org.json.JSONException;
+import org.json.JSONObject;
+import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.api.Test;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.web.server.LocalServerPort;
+import org.springframework.http.HttpStatus;
+
+import java.util.List;
+
+import static io.restassured.RestAssured.given;
+import static org.hamcrest.Matchers.*;
+
+@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+public class EmployeeControllerTest extends AbstractDbTest {
+
+    @LocalServerPort
+    private int port;
+
+    private final String BASE_PATH = "/api/v1/employees";  // Path to endpoint is always string
+
+    @Test
+    public void testGetAllEmployees() {
+        List<EmployeeDto> list = given()
+                .port(port)
+                .when()
+                .get(BASE_PATH) // Путь к эндпоинту
+                .then()
+                .assertThat()
+                .statusCode(HttpStatus.OK.value())
+                .and()
+                .extract()
+                .body()
+                .as(new TypeRef<>() {
+                }); // Возвращает результат с Эндпоинта, и мы сможем проверить что вернул Эндпоинт
+        // You may want to add additional assertions to test the actual data returned by the endpoint
+    }
+
+    @Test
+    public void testEmployeesResponseBody() {
+        given()
+                .when()
+                .get(BASE_PATH)
+                .then()
+                .assertThat()
+                .statusCode(HttpStatus.OK.value())
+                .body("id", hasItems(1L, 2L),
+                        // TODO
+                        "firstName", hasItems("User-1", "User-2"),
+                        "lastName", hasItems("Admin", "Supervisor"),
+                        "id[0]", equalTo(1L),
+                        "firstName[0]", is(equalTo("User-1")),
+                        "size()", equalTo(2L)
+                );
+    }
+
+    @Test
+    public void testGetEmployeeWithParam() {
+        Response empResponse = given()
+                .contentType(ContentType.JSON)
+//                .pathParam("id", "1") // Удалю эту строку, потому что она дублирует функционал .get()
+                .when()
+                .get(BASE_PATH + "/{id}", "1")
+                // Когда хочешь проверить получение сущности по айди, и
+                // если она не найдена, получается 404
+                .then()
+                .assertThat()
+                .statusCode(HttpStatus.OK.value())
+                .extract().response();
+        // TODO
+        // Внутри РестАщюрд и Спринга есть маппер, там не нужно передавать стрингу полями
+        // Можно проинициализировать обычный объект, который ты хочешь передать без маппинга
+        // ТАК ЖЕ, как и в других тестах, ты создавал объект, метод, и ты передавать будешь не метод, а боди
+        JsonPath jsonPathObj = empResponse.jsonPath();
+        Assertions.assertEquals(jsonPathObj.getLong("id"), 1L);
+        Assertions.assertEquals(jsonPathObj.getString("firstName"), "User-1");
+        Assertions.assertEquals(jsonPathObj.getString("lastName"), "Admin");
+    }
+
+    @Test
+    public void extractGetEmployeeResponse() {
+        Response res = given()
+                .when()
+                .get(BASE_PATH)
+                .then()
+                .assertThat()
+                .statusCode(HttpStatus.OK.value())
+                .extract().response();
+        System.out.println("response = " + res.asString());
+    }
+
+    @Test
+    public void testPostEmployee() throws JSONException {
+        JSONObject empParams = new JSONObject();
+        empParams.put("firstName", "Newuser");
+        empParams.put("lastName", "Newfamily");
+
+        given()
+                .contentType(ContentType.JSON)
+                .body(empParams.toString())
+                .when()
+                .post(BASE_PATH)
+//                .post("http://localhost:8080/employee")
+                .then()
+                .assertThat().statusCode(HttpStatus.OK.value())
+                .body("firstName", equalTo("Newuser"))
+                .body("lastName", equalTo("Newfamily"));
+    }
+
+}
+
+/// Although only testGetAllEmployees seems to work.
+/// I will try solving this issue with the help of GPT3, here is what he suggested:
+It seems that the issue with the "connection refused" error is that the PostgreSQL container may not be fully started
+before the tests are run, and some tests may be executed before the container is ready.
+
+To address this issue, you can add a check to ensure that the container is fully started
+before running any tests. One way to do this is to use the waitStrategy method
+of the PostgreSQLContainer class to wait for the container to become ready.
+Here's an updated version of AbstractDbTest that includes this change:
+
+java
+Copy code
+@Testcontainers
+@ContextConfiguration(initializers = {AbstractDbTest.Initializer.class})
+public class AbstractDbTest {
+
+    private static final PostgreSQLContainer<?> postgresContainer =
+            new PostgreSQLContainer<>("postgres:13.1-alpine")
+                    .withDatabaseName("employees")
+                    .withUsername("postgres")
+                    .withPassword("postgres")
+                    .withStartupTimeout(Duration.ofSeconds(30)) // Wait up to 30 seconds for container to start
+                    .waitingFor(Wait.forLogMessage(".*database system is ready to accept connections.*\\n", 1)); // Wait for log message indicating container is ready
+
+    static class Initializer implements ApplicationContextInitializer<ConfigurableApplicationContext> {
+        public void initialize(ConfigurableApplicationContext configurableApplicationContext) {
+            TestPropertyValues.of(
+                    "spring.datasource.url=" + postgresContainer.getJdbcUrl(),
+                    "spring.datasource.username=" + postgresContainer.getUsername(),
+                    "spring.datasource.password=" + postgresContainer.getPassword()
+            ).applyTo(configurableApplicationContext.getEnvironment());
+        }
+    }
+
+    static {
+        postgresContainer.start();
+    }
+
+    @BeforeAll
+    public static void checkPostgresContainerIsRunning() {
+        assumeTrue(postgresContainer.isRunning());
+    }
+
+}
+With this update, the checkPostgresContainerIsRunning method is executed before any test methods,
+and it checks if the PostgreSQL container is running before continuing with the tests.
+If the container is not running, the test will be skipped.
+
+I hope this helps resolve the issue with the "connection refused" error.
+
+/// This doesn't seem to fix the issue...
+
+
+
+
+
+
+
+
+
+
 
 
 
