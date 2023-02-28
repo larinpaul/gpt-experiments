@@ -627,7 +627,59 @@ I hope this helps resolve the issue with the "connection refused" error.
 /// This doesn't seem to fix the issue...
 
 
+/// Anyways, fast forward,
+/// I have given GPT my controller code and the code for the test post method
+/// And I asked him to write code to test the put method
+/// This is what he wrote:
 
+Sure! Here is a similar test for the updateEmployee method:
+
+scss
+Copy code
+@Test
+public void testUpdateEmployee() {
+    // create an employee
+    EmployeeDto employeeDto = new EmployeeDto();
+    employeeDto.setFirstName("Newuser");
+    employeeDto.setLastName("Newfamily");
+    employeeDto.setEmail("Newuser@mail.com");
+    Long createdEmployeeId = employeeService.create(employeeDto);
+
+    // update the employee
+    EmployeeDto updatedEmployeeDto = new EmployeeDto();
+    updatedEmployeeDto.setFirstName("Updateduser");
+    updatedEmployeeDto.setLastName("Updatedfamily");
+    updatedEmployeeDto.setEmail("updateduser@mail.com");
+
+    given()
+        .port(port)
+        .contentType(ContentType.JSON)
+        .body(updatedEmployeeDto)
+        .when()
+        .put(BASE_PATH + "/" + createdEmployeeId)
+        .then()
+        .assertThat()
+        .statusCode(HttpStatus.OK.value());
+
+    // verify the employee is updated
+    EmployeeDto retrievedEmployee = given()
+                                    .port(port)
+                                    .when()
+                                    .get(BASE_PATH + "/" + createdEmployeeId)
+                                    .then()
+                                    .extract()
+                                    .as(EmployeeDto.class);
+
+    assertEquals(updatedEmployeeDto.getFirstName(), retrievedEmployee.getFirstName());
+    assertEquals(updatedEmployeeDto.getLastName(), retrievedEmployee.getLastName());
+    assertEquals(updatedEmployeeDto.getEmail(), retrievedEmployee.getEmail());
+}
+This test creates an employee, then updates it by sending a PUT request to the API
+with the updated employee details. It then verifies that the employee was updated correctly
+by retrieving the employee from the API and comparing its details to the updated employee details
+that were sent in the PUT request.
+/// Well, this test at least launched...
+/// Gotta verify how good it actually is but hey, at least it kinda works...
 
 
 
