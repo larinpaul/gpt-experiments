@@ -682,6 +682,356 @@ that were sent in the PUT request.
 /// Gotta verify how good it actually is but hey, at least it kinda works...
 
 
+//// 2022/03/01
+/// Here is what I asked ChatGPT today:
+I have a Java Spring project with Postgresq, RestAssured.
+Here are my API controller methods:
+@RestController
+@RequestMapping("/api/v1/employees")
+@RequiredArgsConstructor
+public class EmployeeController {
+
+    private final EmployeeService employeeService;
+
+    // Get employees
+    @GetMapping
+    public List<EmployeeDto> getAllEmployees() {
+        return employeeService.findAll();
+    }
+
+    // Get an employee by id
+    @GetMapping("/{id}")
+    public EmployeeDto getEmployeeById(@PathVariable(value = "id") Long employeeId) {
+        return employeeService.findById(employeeId);
+    }
+
+    // Save an employee
+    @PostMapping
+    public Long createEmployee(@RequestBody EmployeeDto employee) {
+        return this.employeeService.create(employee); // Автоматически смаппится объект из json в POJO
+    }
+
+    // Update an employee
+    @PutMapping("/{id}")
+    public EmployeeDto updateEmployee(
+            @PathVariable(value = "id") Long employeeId,
+            @RequestBody EmployeeDto employeeDetails
+    ) {
+        return employeeService.update(employeeId, employeeDetails);
+    }
+
+    // Delete an employee
+    @DeleteMapping("/{id}")
+    public void deleteEmployee(@PathVariable(value = "id") Long employeeId) {
+        this.employeeService.delete(employeeId);
+
+    }
+}
+
+I've written some tests, like testGetAllEmployees, testPostEmployee, testUpdateEmployee:
+@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+public class EmployeeControllerTest extends AbstractDbTest {
+
+    @LocalServerPort
+    private int port;
+
+    @Autowired
+    private EmployeeRepository employeeRepository;
+
+    private final String BASE_PATH = "/api/v1/employees"; 
+   @Test
+    public void testPostEmployee() {
+        EmployeeDto employeeDto = new EmployeeDto();
+
+        employeeDto.setFirstName("Newuser");
+        employeeDto.setLastName("Newfamily");
+        employeeDto.setEmail("Newuser@mail.com");
+        
+        Long actual = given()
+                .port(port)
+                .contentType(ContentType.JSON)
+                .body(employeeDto)
+                .when()
+                .post(BASE_PATH)
+                .then()
+                .assertThat()
+                .statusCode(HttpStatus.OK.value())
+                .and()
+                .extract()
+                .body()
+                .as(Long.class);
+
+        assertNotNull(actual);
+
+        Optional<Employee> byId = employeeRepository.findById(actual);
+
+        assertFalse(byId.isEmpty());
+
+        Employee employee = byId.get();
+
+        assertEquals(employeeDto.getFirstName(), employee.getFirstName());
+        assertEquals(employeeDto.getLastName(), employee.getLastName());
+        assertEquals(employeeDto.getEmail(), employee.getEmail());
+
+    }
+
+    @Test
+    void testGetAllEmployees() {
+        List<EmployeeDto> list = given()
+                .port(port)
+                .when()
+                .get(BASE_PATH) // Путь к эндпоинту
+                .then()
+                .assertThat()
+                .statusCode(HttpStatus.OK.value())
+                .and()
+                .extract()
+                .body()
+                .as(new TypeRef<>() {
+                });
+    }
+   @Test
+    void testUpdateEmployee() {
+        // Create an employee
+        EmployeeDto employeeDto = new EmployeeDto();
+        employeeDto.setFirstName("Newuser");
+        employeeDto.setLastName("Newfamily");;
+        employeeDto.setEmail("Newuser@mail.com");
+        Employee employee = new Employee();
+        Long employeeId = employeeRepository.save(employee).getId();
+
+        // Update the employee
+        EmployeeDto updatedEmployeeDto = new EmployeeDto();
+        updatedEmployeeDto.setFirstName("Updateduser");
+        updatedEmployeeDto.setLastName("Updatedfamily");
+        updatedEmployeeDto.setEmail("Updateduser@mail.com");
+
+        // Verify the status code and extract the body
+        EmployeeDto actual =
+                given()
+                        .port(port)
+                        .contentType(ContentType.JSON)
+                        .body(updatedEmployeeDto)
+                        .when()
+                        .put(BASE_PATH + "/" + employeeId)
+                        .then()
+                        .assertThat()
+                        .statusCode(HttpStatus.OK.value())
+                        .and()
+                        .extract()
+                        .body()
+                        .as(EmployeeDto.class);
+
+        assertNotNull(actual);
+        Optional<Employee> byId = employeeRepository.findById(employeeId);
+        assertFalse(byId.isEmpty());
+
+        Employee updatedEmployee = byId.get();
+
+        // Verify the employee is updated
+        assertEquals(updatedEmployeeDto.getFirstName(), updatedEmployee.getFirstName());
+        assertEquals(updatedEmployeeDto.getLastName(), updatedEmployee.getLastName());
+        assertEquals(updatedEmployeeDto.getEmail(), updatedEmployee.getEmail());
+
+    }
+
+    @AfterEach
+    void clearDbData() {
+        employeeRepository.deleteAll();
+    }
+
+}
+Can you please write a similar test for getEmployeeById method?
+
+/// Here's what ChatGPT wrote:
+Sure! Here's an example test for getEmployeeById method:
+
+scss
+Copy code
+@Test
+void testGetEmployeeById() {
+    // Create an employee
+    EmployeeDto employeeDto = new EmployeeDto();
+    employeeDto.setFirstName("Newuser");
+    employeeDto.setLastName("Newfamily");;
+    employeeDto.setEmail("Newuser@mail.com");
+    Long employeeId = employeeRepository.save(employeeDto.toEmployee()).getId();
+
+    // Get the employee by id
+    EmployeeDto actual =
+            given()
+                    .port(port)
+                    .when()
+                    .get(BASE_PATH + "/" + employeeId)
+                    .then()
+                    .assertThat()
+                    .statusCode(HttpStatus.OK.value())
+                    .and()
+                    .extract()
+                    .body()
+                    .as(EmployeeDto.class);
+
+    assertNotNull(actual);
+
+    Employee expected = employeeDto.toEmployee();
+    expected.setId(employeeId);
+
+    assertEquals(expected.getFirstName(), actual.getFirstName());
+    assertEquals(expected.getLastName(), actual.getLastName());
+    assertEquals(expected.getEmail(), actual.getEmail());
+}
+This test creates a new employee, saves it to the database, and then retrieves it using the getEmployeeById method.
+It then compares the retrieved employee with the expected employee to ensure that the API is returning the correct data.
+/// Well, there is obviously no ".toEmployee()" method but hey, let's find out how it will work after I fix it
+/// Oh, well, there is no "setId" in EmployeeDto! I guess, he just didn't know it.
+/// I'll try a new prompt later, but now I gotta try to solve it myself.
+
+
+/// Anyways, I had to re-write a lot, so the final test turned out to be like this:
+    @Test
+    void testGetEmployee() {
+        // Create an employee in the DB
+        Employee employee = new Employee();
+        employee.setFirstName("Newuser1");
+        employee.setLastName("Newfamily1");
+        employee.setEmail("Newuser@mail.com");
+        Long employeeId = employeeRepository.save(employee).getId();
+
+        // Create an expected employee
+        EmployeeDto expected = new EmployeeDto();
+        expected.setFirstName("Newuser1");
+        expected.setLastName("Newfamily1");
+        expected.setEmail("Newuser@mail.com");
+
+        // Validate status code and extract the body of the request
+        EmployeeDto actual = given()
+                .port(port)
+                .contentType(ContentType.JSON)
+                .when()
+                .get(BASE_PATH + "/" + employeeId)
+                .then()
+                .log().all()
+                .assertThat()
+                .statusCode(HttpStatus.OK.value())
+                .and()
+                .extract()
+                .body()
+                .as(EmployeeDto.class);
+
+        assertNotNull(actual);
+
+        assertThat(actual).usingRecursiveComparison()
+                .isEqualTo(expected);
+    }
+
+/// Now, I fed the AI the test above as well, and asked him to write a test for the delete method...
+/// (The AI also seems to have adapted his style to my previous requests and now sounds like James Joyce :D)
+
+/* Certainly, my dear interlocutor! Here is my attempt to compose a test for the getEmployeeById method: */
+
+/// Anyways, I mistakenly asked him to write testGetEmployee again...
+/// He seems to have just regurgitated my solution verbatim, adding one comment (which is also interesting, by the way!)
+/// Now, I wrote this:
+
+Sorry, I meant for deleteEmployeeById
+
+/// Here are the results
+Certainly, here's an example test for deleteEmployeeById:
+
+java
+Copy code
+@Test
+void testDeleteEmployeeById() {
+    // Create an employee in the DB
+    Employee employee = new Employee();
+    employee.setFirstName("Newuser1");
+    employee.setLastName("Newfamily1");
+    employee.setEmail("Newuser1@mail.com");
+    Long employeeId = employeeRepository.save(employee).getId();
+
+    // Delete the employee by ID
+    given()
+        .port(port)
+        .when()
+        .delete(BASE_PATH + "/" + employeeId)
+        .then()
+        .assertThat()
+        .statusCode(HttpStatus.NO_CONTENT.value());
+
+    // Verify that the employee has been deleted
+    Optional<Employee> byId = employeeRepository.findById(employeeId);
+    assertTrue(byId.isEmpty());
+}
+In this test, we first create an employee in the database using employeeRepository.save(),
+and then we call delete() on the employee's endpoint with the appropriate ID.
+We then assert that the response status code is HttpStatus.NO_CONTENT,
+indicating a successful deletion.
+Finally, we check that the employee is no longer present in the database
+by calling findById() and asserting that the result is empty.
+
+/// There will be aproblem, though:
+/// 1 expectation failed.
+/// Expected status code <204> but was <200>.
+
+/// Trying to figure out how to solve it. The AI suggests I change the endpoint...
+
+/// Here's what is suggested:
+Based on the problem you described, you want to delete all employees whose last name matches a given value. To achieve this, you can modify the deleteEmployee method to call a new method in the service that deletes all employees by last name:
+
+less
+Copy code
+@DeleteMapping("/lastname/{lastName}")
+public void deleteEmployeesByLastName(@PathVariable(value = "lastName") String lastName) {
+    this.employeeService.deleteByLastName(lastName);
+}
+Then, you need to add a new method to your EmployeeService interface to delete employees by last name:
+
+javascript
+Copy code
+void deleteByLastName(String lastName);
+Finally, you need to implement this method in EmployeeServiceImpl:
+
+typescript
+Copy code
+public void deleteByLastName(String lastName) {
+    List<Employee> employees = employeeRepository.findByLastName(lastName);
+    employeeRepository.deleteAll(employees);
+}
+Note that in this implementation, we first retrieve all employees whose last name matches the given value using the findByLastName method in the EmployeeRepository. Then, we pass this list of employees to the deleteAll method in the repository to delete them all at once.
+
+/// I might create a new endpoint, by the way! :D
+/// Buuut, not today...
+
+/// Well, in any case, I've decided to just replace this:
+        .statusCode(HttpStatus.NO_CONTENT.value());
+/// with this:
+        .statusCode(HttpStatus.OK.value());
+
+/// So there is no error anymore.
+/// In any case, this is my final variant of the test method:
+    @Test
+    void testDeleteEmployeeById() {
+        // Create an employee in the DB
+        Employee employee = new Employee();
+        employee.setFirstName("Newuser1");
+        employee.setLastName("Newfamily1");
+        employee.setEmail("Newuser1@mail.com");
+        Long employeeId = employeeRepository.save(employee).getId();
+
+        // Delete the employee by Id
+        given()
+                .port(port)
+                .when()
+                .delete(BASE_PATH + "/" + employeeId)
+                .then()
+                .assertThat()
+                .statusCode(HttpStatus.OK.value());
+
+        // Verify that the employee has been deleted
+        boolean byId = employeeRepository.existsById(employeeId);
+        assertFalse(byId);
+    }
+
 
 
 
